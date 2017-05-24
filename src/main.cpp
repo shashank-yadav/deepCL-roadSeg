@@ -2,7 +2,8 @@
 #include "colorLines.h"
 // #include <opencv2/opencv.hpp>
 
-#define K 1e4
+// #define K 1e4
+#define K 5e2
 
 using namespace std;
 using namespace cv;
@@ -38,7 +39,52 @@ int main(int argc, char const *argv[])
 
     colorLines c;
     c.init(image,10);
+    std::vector<float> lineProbsRoad , lineProbsNonRoad ;
+    lineProbsRoad.resize(c.lines.size());
+    lineProbsNonRoad.resize(c.lines.size());
 
+    for (int i = 0; i < lineProbsRoad.size(); ++i){
+        lineProbsRoad[i] = 0;
+        lineProbsNonRoad[i] = 0;
+    }
+
+    // cout<<c.lines.size();
+
+    for (int i = 0; i < image.cols; ++i){
+        for (int j = 0; j < image.rows; ++j){
+                
+                float p_r = (float)image_road.at<uchar>(j,i); 
+                float p_nr = (float)image_nonRoad.at<uchar>(j,i); 
+
+                Point3d pixel = (Point3d)image.at<Vec3b>(j,i);
+                std::vector<float> temp = c.get_probability(pixel);
+
+                int maxPos = 0;
+                float maxVal = 0;
+
+                for (int k = 0; k < temp.size(); ++k){
+                     if (temp[k] > maxVal){
+                         maxVal = temp[k];
+                         maxPos = k;
+                     }
+                } 
+            
+                if( p_r > p_nr)
+                    lineProbsRoad[maxPos] += 1;
+                else
+                    lineProbsNonRoad[maxPos] += 1;
+        }
+    }
+
+    int roadLine = 0;
+    float maxVal = 0;
+
+    for (int k = 0; k < lineProbsRoad.size(); ++k){
+        if (lineProbsRoad[k] > maxVal){
+             maxVal = lineProbsRoad[k];
+            roadLine = k;
+        }
+    } 
 
 
     for (int i = 0; i < image.cols; ++i){
@@ -50,7 +96,34 @@ int main(int argc, char const *argv[])
             float normalize = p_r + p_nr;
             p_r /= normalize;
             p_nr /= normalize;
-            g -> add_tweights( nodeId , p_r , p_nr );
+            // g -> add_tweights( nodeId , p_r , p_nr );
+
+            ///////
+            Point3d pixel = (Point3d)image.at<Vec3b>(j,i);
+            std::vector<float> temp = c.get_probability(pixel);
+
+            int maxPos = 0;
+            float maxVal = 0;
+
+            for (int k = 0; k < temp.size(); ++k){
+                 if (temp[k] > maxVal){
+                     maxVal = temp[k];
+                     maxPos = k;
+                 }
+            } 
+        
+            if( maxPos == roadLine){
+                p_r *= 0.7;
+                p_nr *= 0.3;
+                p_r /= normalize;
+                p_nr /= normalize;
+
+                g -> add_tweights( nodeId , p_r , p_nr );
+            }
+            else
+                g -> add_tweights( nodeId , p_r , p_nr );
+            ////////
+
         }
     }
 
@@ -65,6 +138,7 @@ int main(int argc, char const *argv[])
             for (int k = 0; k < 4; ++k){
                 Point3d pixel2 = (Point3d)image.at<Vec3b>( j+nby[k] , i+nbx[k] );
                 float prob = c.get_probability2(pixel1,pixel2);
+                cout<<"asdasdas : "<<prob<<endl;
                 g -> add_edge(  oneD(i,j,image.rows) , oneD(i+nbx[k],j+nby[k],image.rows) , K*prob , K*prob );
 
                 // cout<<prob<<endl;
@@ -103,8 +177,12 @@ int main(int argc, char const *argv[])
 
     addWeighted( image, alpha, result, beta, 0.0, dst);
     imwrite( "Result.png", dst );
+    cout<<"Lines : "<<c.lines.size()<<endl;
   
     
+    for (int i = 0; i < lineProbsRoad.size(); ++i){
+        cout<<i<<"   "<<lineProbsRoad[i]<<"   "<<lineProbsNonRoad[i]<<endl;
+    }
 
     return 0;
 }
